@@ -8,7 +8,7 @@ It runs as a long-lived web service, not a Railway Cron job. That matters becaus
 
 - Loads the company universe from `data/BEAUTY_UNIVERSE_MASTER.csv`.
 - Tracks ticker-backed companies with `yfinance`.
-- Fetches quotes with per-symbol retry and a recent-history fallback, because Yahoo's batched `fast_info` path can return `KeyError` even for valid tickers.
+- Fetches quotes through Yahoo's direct chart API with explicit timeouts and concurrent workers. `yfinance` is no longer used for the normal quote path because it can hang on Railway before publishing prices.
 - Adds ticker overrides for six companies that were present but missing symbols in the original CSV: Terminal X, Shobido, Coreana Cosmetics, Kimberly-Clark, Nature's Sunshine Products, and Nu Skin Enterprises.
 - Excludes non-standalone or Yahoo-unpriceable rows from the app-local CSV: Avon Products, Fancl, Revlon, MAV Beauty Brands, Relativity Holdings, and Scientist Home Future Health.
 - Updates Natura from the delisted `NTCO3.SA` symbol to `NATU3.SA`.
@@ -48,6 +48,9 @@ uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
 - `FINNHUB_API_KEY`: optional. Enables Finnhub company-news lookup before other news providers.
 - `ALPHA_VANTAGE_API_KEY`: optional. Enables Alpha Vantage `NEWS_SENTIMENT` lookup if Finnhub is not configured or has no result.
 - `FETCH_NEWS_ON_REFRESH`: optional. Defaults to `false` so prices populate quickly on Railway. Set to `true` if you want every refresh to also fetch article links.
+- `QUOTE_WORKERS`: optional. Concurrent Yahoo chart requests. Defaults to `12`.
+- `QUOTE_TIMEOUT_SECONDS`: optional. Per-symbol quote timeout. Defaults to `8`.
+- `ENABLE_YFINANCE_QUOTE_FALLBACK`: optional. Defaults to `false`; leave it off on Railway unless you specifically want yfinance as a backup.
 
 ## Important Limits
 

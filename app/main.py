@@ -10,12 +10,12 @@ import threading
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-import yfinance as yf
 from fastapi import FastAPI, Response
 from fastapi.responses import HTMLResponse
 
@@ -31,6 +31,9 @@ QUOTE_BATCH_SIZE = int(os.getenv("QUOTE_BATCH_SIZE", "40"))
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
 FETCH_NEWS_ON_REFRESH = os.getenv("FETCH_NEWS_ON_REFRESH", "false").lower() == "true"
+QUOTE_WORKERS = int(os.getenv("QUOTE_WORKERS", "12"))
+QUOTE_TIMEOUT_SECONDS = int(os.getenv("QUOTE_TIMEOUT_SECONDS", "8"))
+ENABLE_YFINANCE_QUOTE_FALLBACK = os.getenv("ENABLE_YFINANCE_QUOTE_FALLBACK", "false").lower() == "true"
 
 
 SYMBOL_OVERRIDES = {
@@ -194,27 +197,91 @@ def parse_symbols(ticker_value: str) -> list[str]:
 
 def fetch_quotes(companies: list[Company], previous: dict[str, QuoteState]) -> dict[str, QuoteState]:
     output: dict[str, QuoteState] = {}
-    for company in companies:
-        prior = previous.get(company.company, QuoteState())
-        errors: list[str] = []
-        for symbol in company.symbols:
-            quote, error = fetch_quote_for_symbol(symbol, prior)
-            if quote.price is not None:
-                output[company.company] = quote
-                break
-            errors.append(error)
-
-        if company.company not in output:
-            output[company.company] = QuoteState(
-                previous_price=prior.price,
-                updated_at=utc_now(),
-                error="; ".join(e for e in errors if e) or "no symbols",
-            )
+    with ThreadPoolExecutor(max_workers=QUOTE_WORKERS) as executor:
+        futures = {
+            executor.submit(fetch_quote_for_company, company, previous.get(company.company, QuoteState())): company
+            for company in companies
+        }
+        for future in as_completed(futures):
+            company = futures[future]
+            try:
+                output[company.company] = future.result()
+            except Exception as exc:
+                prior = previous.get(company.company, QuoteState())
+                output[company.company] = QuoteState(
+                    previous_price=prior.price,
+                    updated_at=utc_now(),
+                    error=f"{type(exc).__name__}: {exc}",
+                )
 
     return output
 
 
-def fetch_quote_for_symbol(symbol: str, prior: QuoteState) -> tuple[QuoteState, str]:
+def fetch_quote_for_company(company: Company, prior: QuoteState) -> QuoteState:
+    errors: list[str] = []
+    for symbol in company.symbols:
+        quote = fetch_quote_for_symbol(symbol, prior)
+        if quote.price is not None:
+            return quote
+        errors.append(quote.error)
+
+    return QuoteState(
+        previous_price=prior.price,
+        updated_at=utc_now(),
+        error="; ".join(e for e in errors if e) or "no symbols",
+    )
+
+
+def fetch_quote_for_symbol(symbol: str, prior: QuoteState) -> QuoteState:
+    quote = fetch_yahoo_chart_quote(symbol, prior)
+    if quote.price is not None or not ENABLE_YFINANCE_QUOTE_FALLBACK:
+        return quote
+
+    return fetch_yfinance_quote(symbol, prior)
+
+
+def fetch_yahoo_chart_quote(symbol: str, prior: QuoteState) -> QuoteState:
+    encoded_symbol = urllib.parse.quote(symbol, safe="")
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{encoded_symbol}"
+        "?range=5d&interval=1d&includePrePost=false"
+    )
+    data = fetch_json(url, timeout=QUOTE_TIMEOUT_SECONDS)
+    error = f"{symbol}: no chart data"
+    try:
+        result = data["chart"]["result"][0]
+        meta = result.get("meta", {})
+        indicators = result.get("indicators", {})
+        quote_rows = indicators.get("quote", [{}])[0]
+        closes = [safe_float(v) for v in quote_rows.get("close", [])]
+        closes = [v for v in closes if v is not None]
+        price = safe_float(meta.get("regularMarketPrice"))
+        if price is None and closes:
+            price = closes[-1]
+        prev_close = safe_float(meta.get("chartPreviousClose"))
+        if prev_close is None and len(closes) >= 2:
+            prev_close = closes[-2]
+
+        return build_quote_state(
+            symbol=symbol,
+            price=price,
+            prev_close=prev_close,
+            prior=prior,
+            currency=str(meta.get("currency") or ""),
+            market_state=str(meta.get("marketState") or ""),
+            error="" if price is not None else error,
+        )
+    except Exception as exc:
+        return QuoteState(
+            previous_price=prior.price,
+            updated_at=utc_now(),
+            error=f"{symbol}: chart {type(exc).__name__}",
+        )
+
+
+def fetch_yfinance_quote(symbol: str, prior: QuoteState) -> QuoteState:
+    import yfinance as yf
+
     ticker = yf.Ticker(symbol)
     price: float | None = None
     prev_close: float | None = None
@@ -244,6 +311,26 @@ def fetch_quote_for_symbol(symbol: str, prior: QuoteState) -> tuple[QuoteState, 
         except Exception as exc:
             errors.append(f"history {type(exc).__name__}")
 
+    return build_quote_state(
+        symbol=symbol,
+        price=price,
+        prev_close=prev_close,
+        prior=prior,
+        currency=currency,
+        market_state=market_state,
+        error=f"{symbol}: {', '.join(errors) or 'no price'}" if price is None else "",
+    )
+
+
+def build_quote_state(
+    symbol: str,
+    price: float | None,
+    prev_close: float | None,
+    prior: QuoteState,
+    currency: str,
+    market_state: str,
+    error: str,
+) -> QuoteState:
     baseline = prior.price if prior.price is not None else prev_close
     change = price - baseline if price is not None and baseline is not None else None
     change_pct = (change / baseline * 100) if change is not None and baseline else None
@@ -262,9 +349,9 @@ def fetch_quote_for_symbol(symbol: str, prior: QuoteState) -> tuple[QuoteState, 
         currency=currency,
         market_state=market_state,
         updated_at=utc_now(),
-        error="" if price is not None else f"{symbol}: {', '.join(errors) or 'no price'}",
+        error=error,
     )
-    return quote, quote.error
+    return quote
 
 
 def get_fast_info(info: Any, key: str) -> Any:
@@ -357,6 +444,8 @@ def fetch_alpha_vantage_news(symbol: str, limit: int) -> list[NewsItem]:
 
 
 def fetch_yfinance_news(company_name: str, symbol: str, limit: int) -> list[NewsItem]:
+    import yfinance as yf
+
     candidates: list[dict[str, Any]] = []
     try:
         candidates = yf.Ticker(symbol).get_news(count=limit, tab="news")
