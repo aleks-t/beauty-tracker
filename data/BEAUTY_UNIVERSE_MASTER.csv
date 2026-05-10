@@ -1,0 +1,92 @@
+company,country,ticker,exchange,isin,sources,notes
+Adore Beauty Group Limited,Australia,ABY.AX | ADBGF,Australian Securities Exchange | Other OTC,AU0000109506,FMP,Specialty Retail / Consumer Cyclical
+Natura Cosméticos,Brazil,NATU3.SA,B3 Brazil | NTCO3:São Paulo Stock Exchange | NTCO:New York Stock Exchange,BRNATUACNOR6,Hand + Wikidata,"Natura, Avon, The Body Shop (formerly), Aesop (formerly) | Former NTCO3; incorporated into Natura Cosméticos and now trades as NATU3"
+Eternal Beauty Holdings Limited,Cayman Islands,6883.HK,Hong Kong Stock Exchange,KYG3206R1092,FMP,Household & Personal Products / Consumer Defensive
+"Hangzhou Haoyue Personal Care Co., Ltd",China,605009.SS,Shanghai Stock Exchange,CNE100004306,FMP,Household & Personal Products / Consumer Defensive
+Proya Cosmetics,China,603605.SS,Shanghai | Shanghai Stock Exchange,CNE100002TP9,FMP + Hand,"Household & Personal Products / Consumer Defensive | Proya, Off & Relax, Timage"
+"Shanghai Chicmax Cosmetic Co., Ltd.",China,2145.HK,Hong Kong Stock Exchange,CNE100005MX1,FMP,Household & Personal Products / Consumer Defensive
+Shanghai Jahwa,China,600315.SS,Shanghai,,Hand,"Herborist, Maxam, Liushen, Giving"
+"Shanghai Lily&Beauty Cosmetics Co.,Ltd.",China,605136.SS,Shanghai Stock Exchange,CNE1000042F1,FMP,Specialty Retail / Consumer Cyclical
+L'Oréal,France,OR.PA,Euronext Paris | LRLCF:OTC Markets Group | OR:Euronext Paris,FR0000120321,Hand + Wikidata,"Lancôme, Kiehl's, Maybelline, Garnier, La Roche-Posay, CeraVe, YSL Beauty"
+LVMH,France,MC.PA,Euronext Paris,,Hand,"Sephora (retail), Dior Beauty, Guerlain, Givenchy Beauty, Fenty Beauty"
+Beiersdorf,Germany,BEI.DE,BDRFF:OTC Markets Group | BEI:Frankfurt Stock Exchange | Xetra Frankfurt,DE0005200000,Hand + Wikidata,"Nivea, Eucerin, La Prairie, Aquaphor"
+Henkel,Germany,HEN3.DE,Xetra Frankfurt,,Hand,"Schwarzkopf, Syoss, Dial, Gliss"
+Natural Beauty Bio-Technology Limited,Hong Kong,0157.HK | NBBTF,Hong Kong Stock Exchange | Other OTC,KYG640061027,FMP,Household & Personal Products / Consumer Defensive
+Dabur India,India,DABUR.NS,NSE India,,Hand,"Dabur, Vatika, Real, Fem"
+Emami,India,EMAMILTD.NS,NSE India,,Hand,"Fair and Handsome, Boroplus, Navratna, Zandu"
+Hindustan Unilever,India,HINDUNILVR.NS,NSE India,,Hand,"Lakmé, Pond's, Dove, Lux, Glow & Lovely (subsidiary of Unilever)"
+Honasa Consumer (Mamaearth),India,HONASA.NS,NSE India,,Hand,"Mamaearth, The Derma Co, Aqualogica, BBlunt"
+Marico,India,MARICO.NS,NSE India,,Hand,"Parachute, Saffola, Set Wet, Nihar"
+Paramount Cosmetics (India) Limited,India,PARMCOS-B.BO,Bombay Stock Exchange,INE143I01013,FMP,Household & Personal Products / Consumer Defensive
+Terminal X,Israel,,TRX:Tel Aviv Stock Exchange,,Wikidata,
+BEAUTY GARAGE Inc.,Japan,3180.T,Tokyo Stock Exchange,JP3800480000,FMP,Household & Personal Products / Consumer Defensive
+"Beauty Kadan Holdings Co., Ltd.",Japan,3041.T,Tokyo Stock Exchange,JP3800470001,FMP,Personal Products & Services / Consumer Cyclical
+"C'bon Cosmetics Co.,Ltd.",Japan,4926.T,Tokyo Stock Exchange,JP3347130001,FMP,Household & Personal Products / Consumer Defensive
+Ivy Cosmetics Corporation,Japan,4918.T,Tokyo Stock Exchange,JP3104990001,FMP,Household & Personal Products / Consumer Defensive
+Kao Corporation,Japan,4452.T,4452:Tokyo Stock Exchange | KAOCF:OTC Markets Group | Tokyo,JP3205800000,Hand + Wikidata,"Bioré, Jergens, John Frieda, Curél, SENSAI"
+Kosé,Japan,4922.T,4922:Tokyo Stock Exchange | Tokyo,JP3283650004,Hand + Wikidata,"Tarte (US), Decorté, Sekkisei, Jill Stuart"
+Lion Corporation,Japan,4912.T,Tokyo,,Hand,oral & personal care
+Pola Orbis Holdings,Japan,4927.T,Tokyo,,Hand,"POLA, Orbis, Jurlique, Three"
+Shiseido,Japan,4911.T | SSDOF | SSDOY,4911:Tokyo Stock Exchange | SSDOF:OTC Markets Group | Other OTC | Tokyo | Tokyo Stock Exchange,US8248414075,FMP + Hand + Wikidata,"Household & Personal Products / Consumer Defensive | Shiseido, NARS, Clé de Peau, Drunk Elephant"
+Shobido,Japan,,7819:Tokyo Stock Exchange,,Wikidata,
+AS MADARA Cosmetics,Latvia,MDARA.RG,NASDAQ Riga,LV0000101624,FMP,Household & Personal Products / Consumer Defensive
+Nice One Beauty Digital Marketing Company,Saudi Arabia,4193.SR,Saudi Exchange,SA1660HI1GH4,FMP,Specialty Retail / Consumer Cyclical
+Amorepacific,South Korea,002790.KS | 002795.KS | 00279K.KS | 090430.KS | 090435.KS,KOSPI | Korea Exchange,KR7002790004,FMP + Hand,"Household & Personal Products / Consumer Defensive | Sulwhasoo, Laneige, Innisfree, Mamonde, Etude"
+Clio Cosmetics,South Korea,214420.KQ,KOSDAQ,,Hand,"Peripera, Clio, Goodal, Healthy Brand"
+Coreana Cosmetics,South Korea,,027050:Korea Exchange (Kosdaq),,Wikidata,
+Hankook Cosmetics,South Korea,003350.KS | 123690.KS,KOSPI | Korea Exchange,KR7123690000,FMP + Hand,"Household & Personal Products / Consumer Defensive | Tenacita, Cellestien"
+LG H&H (LG Household & Health Care),South Korea,051900.KS,KOSPI,,Hand,"Belif, Whoo, OHUI, Su:M37"
+"Leaders Cosmetics Co., Ltd.",South Korea,016100.KQ | 016100.KS,KOSDAQ | Korea Exchange,KR7016100000,FMP,Household & Personal Products / Consumer Defensive
+Puig Brands,Spain,PUIG.MC,BME Madrid | Madrid | Madrid Stock Exchange,ES0105777017,Hand + Wikidata,"Charlotte Tilbury, Carolina Herrera fragrances, Paco Rabanne, Jean Paul Gaultier, Byredo"
+Galderma,Switzerland,GALD.SW,SIX Swiss,,Hand,"Cetaphil, Restylane, Dysport, Alastin, Differin"
+"Dr. Wu Skincare Co., Ltd.",Taiwan,6523.TWO,Taipei Exchange,TW0006523004,FMP,Household & Personal Products / Consumer Defensive
+Beauty Community Public Company Limited,Thailand,BEAUTY.BK,Stock Exchange of Thailand,TH4100010Z04,FMP,Household & Personal Products / Consumer Defensive
+Reckitt Benckiser,United Kingdom,RKT.L,LSE | RB.:London Stock Exchange,GB00B24CGK77,Hand + Wikidata,"Veet, Clearasil, Strepsils (personal-care segment)"
+Revolution Beauty Group plc,United Kingdom,REVB.L,London Stock Exchange,GB00BP7L1T61,FMP,Household & Personal Products / Consumer Defensive
+The Beauty Tech Group plc,United Kingdom,TBTG.L,London Stock Exchange,GB00BTWSXB68,FMP,Household & Personal Products / Consumer Defensive
+Aesthetic Medical International Holdings Group Ltd,United States,PAIYY,SEC (US),,SEC,"Services-Specialty Outpatient Facilities, NEC"
+"Arcutis Biotherapeutics, Inc.",United States,ARQT,SEC (US),,SEC,Pharmaceutical Preparations
+"Axil Brands, Inc.",United States,AXIL,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+"BONK, INC.",United States,BNKK,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+"Bath & Body Works, Inc.",United States,BBWI,BBWI:New York Stock Exchange | SEC (US),US0708301041,SEC + Wikidata,"Retail-Retail Stores, NEC"
+Bausch Health Companies Inc.,United States,BHC,SEC (US),,SEC,Pharmaceutical Preparations
+CHURCH & DWIGHT CO INC /DE/,United States,CHD,SEC (US),,SEC,"Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics"
+COLGATE PALMOLIVE CO,United States,CL,CL:New York Stock Exchange | SEC (US),US1941621039,SEC + Wikidata,"Perfumes, Cosmetics & Other Toilet Preparations"
+COSCIENS Biopharma Inc.,United States,CSCIF,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+COTY INC.,United States,COTY,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+"Caring Brands, Inc.",United States,CABR,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+DSwiss Inc,United States,DQWS,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+ECOLAB INC.,United States,ECL,SEC (US),,SEC,"Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics"
+EDGEWELL PERSONAL CARE Co,United States,EPC,EPC:New York Stock Exchange | New York Stock Exchange | SEC (US),US28035Q1022,FMP + SEC + Wikidata,"Household & Personal Products / Consumer Defensive | Perfumes, Cosmetics & Other Toilet Preparations"
+ESTEE LAUDER COMPANIES INC,United States,EL,EL:New York Stock Exchange | SEC (US),US5184391044,SEC + Wikidata,"Perfumes, Cosmetics & Other Toilet Preparations"
+Empro Group Inc.,United States,EMPG,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+Haleon plc,United States,HLN,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+INTERPARFUMS INC,United States,IPAR,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+InMode Ltd.,United States,INMD,SEC (US),,SEC,Electromedical & Electrotherapeutic Apparatus
+Journey Medical Corp,United States,DERM,SEC (US),,SEC,Pharmaceutical Preparations
+Karbon-X Corp.,United States,KARX,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+Kenvue Inc.,United States,KVUE,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+Kimberly-Clark,United States,,KMB:New York Stock Exchange,US4943681035,Wikidata,
+"Longevity Health Holdings, Inc.",United States,XAGE,SEC (US),,SEC,"Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics"
+Meiwu Technology Co Ltd,United States,WNW,SEC (US),,SEC,"Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics"
+Nature's Sunshine Products,United States,,NATR:Nasdaq,,Wikidata,
+Nu Skin Enterprises,United States,,NUS:New York Stock Exchange,,Wikidata,
+"OLAPLEX HOLDINGS, INC.",United States,OLPX,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+Oddity Tech Ltd,United States,ODD,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+Orion Bliss Corp.,United States,ORIB,SEC (US),,SEC,"Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics"
+PROCTER & GAMBLE Co,United States,PG,SEC (US),,SEC,"Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics"
+"Park Ha Biological Technology Co., Ltd.",United States,BYAH,SEC (US),,SEC,"Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics"
+Pitanium Ltd,United States,PTNM,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+"SOLESENCE, INC.",United States,SLSN,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+STEPAN CO,United States,SCL,SEC (US),,SEC,"Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics"
+"Sally Beauty Holdings, Inc.",United States,SBH,New York Stock Exchange | SEC (US),US79546E1047,FMP + SEC,"Retail-Retail Stores, NEC | Specialty Retail / Consumer Cyclical"
+The Beauty Health Company,United States,SKIN,NASDAQ Capital Market | SEC (US),US88331L1089,FMP + SEC,Household & Personal Products / Consumer Defensive | Surgical & Medical Instruments & Apparatus
+UNILEVER PLC,United States,UL,SEC (US) | UL:New York Stock Exchange | ULVR:London Stock Exchange | UNA:Amsterdam Stock Exchange | UNVR:Indonesia Stock Exchange,GB00B10RZP78,SEC + Wikidata,"Soap, Detergents, Cleang Preparations, Perfumes, Cosmetics"
+UNITED GUARDIAN INC,United States,UG,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+"Ulta Beauty, Inc.",United States,0LIB.L | ULTA,London Stock Exchange | NASDAQ Global Select | SEC (US) | ULTA:Nasdaq,US90384S3031,FMP + SEC + Wikidata,"Retail-Retail Stores, NEC | Specialty Retail / Consumer Cyclical"
+VYNE Therapeutics Inc.,United States,VYNE,SEC (US),,SEC,Pharmaceutical Preparations
+"Valentine Beauty, Inc.",United States,VLBI,Other OTC,US91912D1072,FMP,Personal Products & Services / Consumer Cyclical
+Waldencast plc,United States,WALD,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+Yatsen Holding Ltd,United States,YSG,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+"cbdMD, Inc.",United States,YCBD,SEC (US),,SEC,"Perfumes, Cosmetics & Other Toilet Preparations"
+"e.l.f. Beauty, Inc.",United States,ELF,ELF:New York Stock Exchange | New York Stock Exchange | SEC (US),US26856L1035,FMP + SEC + Wikidata,"Household & Personal Products / Consumer Defensive | Perfumes, Cosmetics & Other Toilet Preparations"
