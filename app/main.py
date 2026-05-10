@@ -758,45 +758,62 @@ def render_html(data: dict[str, Any]) -> str:
         <input id="search" placeholder="Filter companies, tickers, countries, notes...">
       </div>
       <div class="table-wrap">
-        <table id="marketTable">
-          <thead>
-            <tr>
-              <th>Company</th>
-              <th>Country</th>
-              <th>Ticker</th>
-              <th>Price</th>
-              <th>Move</th>
-              <th>Status</th>
-              <th>News</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody>{rows}</tbody>
-        </table>
+        <div id="marketList" class="market-list">{rows}</div>
       </div>
     </section>
   </main>
+  <aside id="detailDrawer" class="drawer" aria-hidden="true">
+    <button id="drawerClose" class="drawer-close" type="button">Close</button>
+    <p id="drawerMeta" class="eyebrow"></p>
+    <h2 id="drawerCompany"></h2>
+    <div class="drawer-price">
+      <strong id="drawerPrice"></strong>
+      <span id="drawerMove"></span>
+    </div>
+    <section>
+      <h3>News</h3>
+      <div id="drawerNews" class="news-list"></div>
+    </section>
+    <section>
+      <h3>Notes</h3>
+      <p id="drawerNotes"></p>
+    </section>
+  </aside>
+  <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
   <script>
     const input = document.getElementById('search');
-    const rows = [...document.querySelectorAll('#marketTable tbody tr.main-row')];
+    const rows = [...document.querySelectorAll('.market-row')];
+    const drawer = document.getElementById('detailDrawer');
+    const backdrop = document.getElementById('drawerBackdrop');
     input.addEventListener('input', () => {{
       const q = input.value.toLowerCase();
       rows.forEach(row => {{
-        const detail = document.getElementById(row.dataset.detail);
-        const match = row.innerText.toLowerCase().includes(q) || detail.innerText.toLowerCase().includes(q);
+        const match = row.dataset.search.includes(q);
         row.hidden = !match;
-        detail.hidden = !match || !row.classList.contains('open');
       }});
     }});
-    document.querySelectorAll('.details-toggle').forEach(button => {{
-      button.addEventListener('click', () => {{
-        const row = button.closest('tr');
-        const detail = document.getElementById(row.dataset.detail);
-        const isOpen = row.classList.toggle('open');
-        detail.hidden = !isOpen;
-        button.textContent = isOpen ? 'Hide' : 'Details';
-      }});
+    function openDrawer(row) {{
+      document.getElementById('drawerMeta').textContent = `${{row.dataset.country}} · ${{row.dataset.ticker}}`;
+      document.getElementById('drawerCompany').textContent = row.dataset.company;
+      document.getElementById('drawerPrice').textContent = row.dataset.price;
+      document.getElementById('drawerMove').textContent = row.dataset.move;
+      document.getElementById('drawerMove').className = row.dataset.direction;
+      document.getElementById('drawerNotes').textContent = row.dataset.notes || 'No notes available.';
+      document.getElementById('drawerNews').innerHTML = row.dataset.news || '<p>No direct news yet.</p>';
+      drawer.classList.add('open');
+      drawer.setAttribute('aria-hidden', 'false');
+      backdrop.hidden = false;
+    }}
+    function closeDrawer() {{
+      drawer.classList.remove('open');
+      drawer.setAttribute('aria-hidden', 'true');
+      backdrop.hidden = true;
+    }}
+    rows.forEach(row => {{
+      row.addEventListener('click', () => openDrawer(row));
     }});
+    document.getElementById('drawerClose').addEventListener('click', closeDrawer);
+    backdrop.addEventListener('click', closeDrawer);
     document.getElementById('refreshBtn').addEventListener('click', async () => {{
       const state = document.getElementById('refreshState');
       state.textContent = 'Scheduling refresh...';
@@ -841,7 +858,6 @@ def render_row(row: dict[str, Any]) -> str:
     price = money(quote["price"], quote["currency"])
     move = pct(quote["change_pct"])
     direction = esc(quote["direction"])
-    detail_id = "detail-" + re.sub(r"[^a-z0-9]+", "-", row["company"].lower()).strip("-")
     news_links = "\n".join(
         f'<a href="{esc(item["url"])}" target="_blank" rel="noreferrer">{esc(item["source"])}: {esc(trim(item["title"], 140))}</a>'
         for item in news
@@ -853,32 +869,32 @@ def render_row(row: dict[str, Any]) -> str:
     status = quote["error"] or quote["market_state"] or quote["updated_at"] or "waiting"
     headline = "No direct headline yet"
     if news:
-        headline = f'{news[0]["source"]}: {trim(news[0]["title"], 80)}'
-    news_count = f"{len(news)} links" if news else "Search"
-    return f"""<tr class="main-row {direction}" data-detail="{detail_id}">
-  <td><strong>{esc(row["company"])}</strong><small>{esc(row["sources"])}</small></td>
-  <td>{esc(row["country"])}</td>
-  <td><code>{esc(row["ticker"])}</code></td>
-  <td class="price">{price}</td>
-  <td class="move">{move}</td>
-  <td class="status-cell">{esc(status)}</td>
-  <td class="headline"><span>{esc(headline)}</span><button class="details-toggle" type="button">Details</button></td>
-  <td class="notes-preview">{esc(trim(row["notes"], 64))}</td>
-</tr>
-<tr class="detail-row" id="{detail_id}" hidden>
-  <td colspan="8">
-    <div class="detail-panel">
-      <section>
-        <h3>News <span>{esc(news_count)}</span></h3>
-        <div class="news-list">{news_links}</div>
-      </section>
-      <section>
-        <h3>Company Notes</h3>
-        <p>{esc(row["notes"] or "No notes available.")}</p>
-      </section>
-    </div>
-  </td>
-</tr>"""
+        headline = f'{news[0]["source"]}: {trim(news[0]["title"], 84)}'
+    search_blob = " ".join([
+        row["company"], row["country"], row["ticker"], row["notes"], headline,
+    ]).lower()
+    return f"""<article class="market-row {direction}"
+  data-search="{esc(search_blob)}"
+  data-company="{esc(row["company"])}"
+  data-country="{esc(row["country"])}"
+  data-ticker="{esc(row["ticker"])}"
+  data-price="{esc(price)}"
+  data-move="{esc(move)}"
+  data-direction="{direction}"
+  data-notes="{esc(row["notes"])}"
+  data-news="{esc(news_links)}">
+  <div class="company-cell">
+    <strong>{esc(row["company"])}</strong>
+    <span>{esc(row["country"])} · {esc(row["sources"])}</span>
+  </div>
+  <code>{esc(row["ticker"])}</code>
+  <div class="quote-cell">
+    <strong>{price}</strong>
+    <span class="move">{move}</span>
+  </div>
+  <p>{esc(headline)}</p>
+  <span class="status-dot" title="{esc(status)}"></span>
+</article>"""
 
 
 def render_headlines(rows: list[dict[str, Any]]) -> str:
@@ -993,32 +1009,68 @@ button { background: var(--ink); color: #fffaf3; border: 0; border-radius: 999px
 .sheet { overflow: hidden; }
 .sheet-title { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 16px; border-bottom: 1px solid var(--line); }
 input { width: min(520px, 100%); border: 1px solid var(--line); background: #fffaf3; padding: 12px 14px; font: inherit; }
-.table-wrap { overflow: auto; max-height: 72vh; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; background: rgba(255,255,255,.35); table-layout: fixed; }
-th, td { padding: 11px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
-th { position: sticky; top: 0; background: #eadccd; z-index: 2; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-th:nth-child(1), td:nth-child(1) { width: 19%; }
-th:nth-child(2), td:nth-child(2) { width: 8%; }
-th:nth-child(3), td:nth-child(3) { width: 11%; }
-th:nth-child(4), td:nth-child(4) { width: 9%; }
-th:nth-child(5), td:nth-child(5) { width: 7%; }
-th:nth-child(6), td:nth-child(6) { width: 13%; }
-th:nth-child(7), td:nth-child(7) { width: 22%; }
-th:nth-child(8), td:nth-child(8) { width: 11%; }
-.main-row:hover { background: rgba(255, 246, 235, .9); }
-code { white-space: normal; overflow-wrap: anywhere; color: #5b2d1f; font-weight: 700; }
-.price, .move { font-weight: 800; white-space: nowrap; }
-.status-cell { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.headline { display: flex; gap: 10px; align-items: center; }
-.headline span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; }
-.details-toggle { margin-left: auto; flex: 0 0 auto; padding: 6px 10px; font-size: 12px; background: #5b2d1f; }
-.notes-preview { color: var(--muted); line-height: 1.2; }
-.detail-row td { padding: 0; background: rgba(255, 250, 243, .72); vertical-align: top; }
-.detail-panel { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(260px, .7fr); gap: 18px; padding: 16px 20px 18px; border-bottom: 1px solid var(--line); }
-.detail-panel h3 { margin: 0 0 10px; font-size: 15px; text-transform: uppercase; letter-spacing: .08em; }
-.detail-panel h3 span { color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
-.detail-panel p { margin: 0; color: var(--ink); line-height: 1.35; }
-.news-list { display: grid; gap: 8px; }
+.table-wrap { overflow: auto; max-height: 72vh; padding: 10px; background: rgba(255,255,255,.24); }
+.market-list { display: grid; gap: 8px; }
+.market-row {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.5fr) minmax(120px, .7fr) minmax(130px, .6fr) minmax(260px, 1.6fr) 16px;
+  gap: 18px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid rgba(223, 205, 189, .78);
+  border-radius: 18px;
+  background: rgba(255, 252, 247, .72);
+  cursor: pointer;
+  transition: transform .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.market-row:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 252, 247, .96);
+  box-shadow: 0 12px 32px rgba(59, 38, 22, .08);
+}
+.company-cell strong { display: block; font-size: 16px; line-height: 1.1; }
+.company-cell span, .quote-cell span { color: var(--muted); font-size: 12px; }
+code { white-space: normal; overflow-wrap: anywhere; color: #5b2d1f; font-weight: 800; }
+.quote-cell strong { display: block; font-size: 17px; }
+.quote-cell .move { font-weight: 900; }
+.market-row p { margin: 0; color: #3d332d; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); justify-self: end; }
+.market-row.up .status-dot { background: var(--up); }
+.market-row.down .status-dot { background: var(--down); }
+.up .move, article.up b, #drawerMove.up, .drawer-price .up { color: var(--up); }
+.down .move, article.down b, #drawerMove.down, .drawer-price .down { color: var(--down); }
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 23, 21, .18);
+  backdrop-filter: blur(2px);
+  z-index: 20;
+}
+.drawer {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  bottom: 18px;
+  width: min(480px, calc(100vw - 36px));
+  transform: translateX(calc(100% + 28px));
+  transition: transform .22s ease;
+  z-index: 21;
+  padding: 22px;
+  overflow: auto;
+  border: 1px solid rgba(223, 205, 189, .92);
+  border-radius: 28px;
+  background: rgba(255, 252, 247, .94);
+  box-shadow: 0 30px 90px rgba(59, 38, 22, .22);
+}
+.drawer.open { transform: translateX(0); }
+.drawer-close { float: right; background: #5b2d1f; }
+.drawer h2 { clear: both; margin: 18px 0 10px; font-size: 34px; line-height: .95; }
+.drawer h3 { margin: 26px 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.drawer-price { display: flex; align-items: baseline; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.drawer-price strong { font-size: 30px; }
+.drawer-price span { font-size: 20px; font-weight: 900; }
+.drawer p { line-height: 1.4; }
+.news-list { display: grid; gap: 10px; }
 .news-list a { color: var(--ink); text-decoration-color: #b98b6e; line-height: 1.25; }
 small { display: block; margin-top: 5px; font-size: 12px; }
 @media (max-width: 900px) {
@@ -1028,7 +1080,7 @@ small { display: block; margin-top: 5px; font-size: 12px; }
   .mover-grid { grid-template-columns: 1fr 1fr; }
   .headline-grid { grid-template-columns: 1fr; }
   input { margin-top: 12px; }
-  table { min-width: 1180px; }
-  .detail-panel { grid-template-columns: 1fr; }
+  .market-row { grid-template-columns: 1fr; gap: 8px; }
+  .status-dot { justify-self: start; }
 }
 """
