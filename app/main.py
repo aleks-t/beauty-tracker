@@ -7,6 +7,7 @@ import json
 import os
 import re
 import threading
+import unicodedata
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -423,8 +424,69 @@ def fetch_news_for_company(company: Company) -> list[NewsItem]:
     if not items and ALPHA_VANTAGE_API_KEY and symbol:
         items = fetch_alpha_vantage_news(symbol, NEWS_PER_COMPANY)
     if not items:
+        items = fetch_yahoo_search_news(company, NEWS_PER_COMPANY)
+    if not items:
         items = fetch_google_news(company.company, NEWS_PER_COMPANY)
     return items
+
+
+def fetch_yahoo_search_news(company: Company, limit: int) -> list[NewsItem]:
+    params = urllib.parse.urlencode({
+        "q": company.company,
+        "quotesCount": 0,
+        "newsCount": max(limit * 3, 6),
+        "enableFuzzyQuery": "false",
+        "region": "US",
+        "lang": "en-US",
+    })
+    data = fetch_json(f"https://query2.finance.yahoo.com/v1/finance/search?{params}", timeout=NEWS_TIMEOUT_SECONDS)
+    raw_items = data.get("news", []) if isinstance(data, dict) else []
+    items: list[NewsItem] = []
+    for item in raw_items:
+        title = str(item.get("title") or "")
+        url = str(item.get("link") or "")
+        if title and url and is_relevant_news(company, title):
+            published = ""
+            if item.get("providerPublishTime"):
+                published = datetime.fromtimestamp(int(item["providerPublishTime"]), timezone.utc).isoformat()
+            items.append(NewsItem(
+                title=title,
+                url=url,
+                source=str(item.get("publisher") or "Yahoo Finance"),
+                published=published,
+            ))
+        if len(items) >= limit:
+            break
+    return items
+
+
+def is_relevant_news(company: Company, title: str) -> bool:
+    haystack = normalize_news_text(title)
+    tokens = meaningful_news_tokens(company.company)
+    for symbol in company.symbols:
+        base_symbol = symbol.split(".", 1)[0].lower()
+        if len(base_symbol) >= 3:
+            tokens.add(base_symbol)
+    return any(token in haystack for token in tokens)
+
+
+def meaningful_news_tokens(value: str) -> set[str]:
+    stopwords = {
+        "and", "the", "inc", "corp", "corporation", "company", "co", "ltd",
+        "limited", "holdings", "group", "plc", "sa", "ag", "cosmetics",
+        "beauty", "personal", "care", "technology",
+    }
+    tokens = set()
+    for token in re.findall(r"[a-z0-9]+", normalize_news_text(value)):
+        if len(token) >= 4 and token not in stopwords:
+            tokens.add(token)
+    return tokens
+
+
+def normalize_news_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    normalized = "".join(c for c in normalized if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", normalized.lower())
 
 
 def fetch_finnhub_news(symbol: str, limit: int) -> list[NewsItem]:
@@ -641,6 +703,7 @@ def styles() -> Response:
 def render_html(data: dict[str, Any]) -> str:
     rows = "\n".join(render_row(row) for row in data["companies"])
     movers = "\n".join(render_mover(row) for row in data["movers"])
+    headlines = render_headlines(data["companies"])
     refresh_state = "Refreshing..." if data["is_refreshing"] else "Idle"
     news_state = "Refreshing news..." if data["is_refreshing_news"] else "News idle"
     return f"""<!doctype html>
@@ -681,6 +744,14 @@ def render_html(data: dict[str, Any]) -> str:
       <div class="mover-grid">{movers}</div>
     </section>
 
+    <section class="headlines">
+      <div class="section-title">
+        <h2>Latest headlines</h2>
+        <span>{data["news_refresh_count"]} news runs</span>
+      </div>
+      <div class="headline-grid">{headlines}</div>
+    </section>
+
     <section class="sheet">
       <div class="sheet-title">
         <h2>Market sheet</h2>
@@ -707,10 +778,24 @@ def render_html(data: dict[str, Any]) -> str:
   </main>
   <script>
     const input = document.getElementById('search');
-    const rows = [...document.querySelectorAll('#marketTable tbody tr')];
+    const rows = [...document.querySelectorAll('#marketTable tbody tr.main-row')];
     input.addEventListener('input', () => {{
       const q = input.value.toLowerCase();
-      rows.forEach(row => row.hidden = !row.innerText.toLowerCase().includes(q));
+      rows.forEach(row => {{
+        const detail = document.getElementById(row.dataset.detail);
+        const match = row.innerText.toLowerCase().includes(q) || detail.innerText.toLowerCase().includes(q);
+        row.hidden = !match;
+        detail.hidden = !match || !row.classList.contains('open');
+      }});
+    }});
+    document.querySelectorAll('.details-toggle').forEach(button => {{
+      button.addEventListener('click', () => {{
+        const row = button.closest('tr');
+        const detail = document.getElementById(row.dataset.detail);
+        const isOpen = row.classList.toggle('open');
+        detail.hidden = !isOpen;
+        button.textContent = isOpen ? 'Hide' : 'Details';
+      }});
     }});
     document.getElementById('refreshBtn').addEventListener('click', async () => {{
       const state = document.getElementById('refreshState');
@@ -756,8 +841,9 @@ def render_row(row: dict[str, Any]) -> str:
     price = money(quote["price"], quote["currency"])
     move = pct(quote["change_pct"])
     direction = esc(quote["direction"])
-    news_links = "".join(
-        f'<a href="{esc(item["url"])}" target="_blank" rel="noreferrer">{esc(item["source"])}: {esc(trim(item["title"], 90))}</a>'
+    detail_id = "detail-" + re.sub(r"[^a-z0-9]+", "-", row["company"].lower()).strip("-")
+    news_links = "\n".join(
+        f'<a href="{esc(item["url"])}" target="_blank" rel="noreferrer">{esc(item["source"])}: {esc(trim(item["title"], 140))}</a>'
         for item in news
     )
     if not news_links:
@@ -765,16 +851,62 @@ def render_row(row: dict[str, Any]) -> str:
         news_links = f'<a href="https://news.google.com/search?q={query}" target="_blank" rel="noreferrer">Search free news</a>'
 
     status = quote["error"] or quote["market_state"] or quote["updated_at"] or "waiting"
-    return f"""<tr class="{direction}">
+    headline = "No direct headline yet"
+    if news:
+        headline = f'{news[0]["source"]}: {trim(news[0]["title"], 80)}'
+    news_count = f"{len(news)} links" if news else "Search"
+    return f"""<tr class="main-row {direction}" data-detail="{detail_id}">
   <td><strong>{esc(row["company"])}</strong><small>{esc(row["sources"])}</small></td>
   <td>{esc(row["country"])}</td>
   <td><code>{esc(row["ticker"])}</code></td>
-  <td>{price}</td>
+  <td class="price">{price}</td>
   <td class="move">{move}</td>
-  <td>{esc(status)}</td>
-  <td class="news">{news_links}</td>
-  <td>{esc(trim(row["notes"], 140))}</td>
+  <td class="status-cell">{esc(status)}</td>
+  <td class="headline"><span>{esc(headline)}</span><button class="details-toggle" type="button">Details</button></td>
+  <td class="notes-preview">{esc(trim(row["notes"], 64))}</td>
+</tr>
+<tr class="detail-row" id="{detail_id}" hidden>
+  <td colspan="8">
+    <div class="detail-panel">
+      <section>
+        <h3>News <span>{esc(news_count)}</span></h3>
+        <div class="news-list">{news_links}</div>
+      </section>
+      <section>
+        <h3>Company Notes</h3>
+        <p>{esc(row["notes"] or "No notes available.")}</p>
+      </section>
+    </div>
+  </td>
 </tr>"""
+
+
+def render_headlines(rows: list[dict[str, Any]]) -> str:
+    cards: list[str] = []
+    seen: set[str] = set()
+    sorted_rows = sorted(
+        rows,
+        key=lambda row: abs(row["quote"]["change_pct"] or 0),
+        reverse=True,
+    )
+    for row in sorted_rows:
+        for item in row["news"]:
+            url = item["url"]
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            move = pct(row["quote"]["change_pct"])
+            direction = esc(row["quote"]["direction"])
+            cards.append(f"""<article class="{direction}">
+  <a href="{esc(url)}" target="_blank" rel="noreferrer">{esc(trim(item["title"], 96))}</a>
+  <span>{esc(row["company"])} · {esc(item["source"])} · <b>{move}</b></span>
+</article>""")
+            break
+        if len(cards) >= 8:
+            break
+    if not cards:
+        return '<p class="empty-news">News is still loading. Click "Refresh news" or wait for the background news job.</p>'
+    return "\n".join(cards)
 
 
 def render_mover(row: dict[str, Any]) -> str:
@@ -848,23 +980,55 @@ button { background: var(--ink); color: #fffaf3; border: 0; border-radius: 999px
 .movers article b { font-size: 28px; }
 .up .move, article.up b { color: var(--up); }
 .down .move, article.down b { color: var(--down); }
+.headlines { margin-bottom: 18px; }
+.section-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+.section-title span { color: var(--muted); font-size: 13px; }
+.headline-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.headline-grid article, .empty-news { background: var(--card); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(59, 38, 22, .08); }
+.headline-grid article { min-height: 118px; padding: 14px; display: grid; align-content: space-between; gap: 12px; }
+.headline-grid a { color: var(--ink); font-weight: 800; line-height: 1.15; text-decoration-color: #b98b6e; }
+.headline-grid span { color: var(--muted); font-size: 12px; line-height: 1.25; }
+.headline-grid b { font-size: 14px; }
+.empty-news { margin: 0; padding: 16px; color: var(--muted); grid-column: 1 / -1; }
 .sheet { overflow: hidden; }
 .sheet-title { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 16px; border-bottom: 1px solid var(--line); }
 input { width: min(520px, 100%); border: 1px solid var(--line); background: #fffaf3; padding: 12px 14px; font: inherit; }
 .table-wrap { overflow: auto; max-height: 72vh; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; background: rgba(255,255,255,.35); }
-th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; background: rgba(255,255,255,.35); table-layout: fixed; }
+th, td { padding: 11px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
 th { position: sticky; top: 0; background: #eadccd; z-index: 2; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-td:first-child { min-width: 260px; }
-td:nth-child(7) { min-width: 320px; }
-code { white-space: normal; overflow-wrap: anywhere; color: #5b2d1f; }
-.news a { display: block; color: var(--ink); margin-bottom: 7px; text-decoration-color: #b98b6e; }
+th:nth-child(1), td:nth-child(1) { width: 19%; }
+th:nth-child(2), td:nth-child(2) { width: 8%; }
+th:nth-child(3), td:nth-child(3) { width: 11%; }
+th:nth-child(4), td:nth-child(4) { width: 9%; }
+th:nth-child(5), td:nth-child(5) { width: 7%; }
+th:nth-child(6), td:nth-child(6) { width: 13%; }
+th:nth-child(7), td:nth-child(7) { width: 22%; }
+th:nth-child(8), td:nth-child(8) { width: 11%; }
+.main-row:hover { background: rgba(255, 246, 235, .9); }
+code { white-space: normal; overflow-wrap: anywhere; color: #5b2d1f; font-weight: 700; }
+.price, .move { font-weight: 800; white-space: nowrap; }
+.status-cell { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.headline { display: flex; gap: 10px; align-items: center; }
+.headline span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; }
+.details-toggle { margin-left: auto; flex: 0 0 auto; padding: 6px 10px; font-size: 12px; background: #5b2d1f; }
+.notes-preview { color: var(--muted); line-height: 1.2; }
+.detail-row td { padding: 0; background: rgba(255, 250, 243, .72); vertical-align: top; }
+.detail-panel { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(260px, .7fr); gap: 18px; padding: 16px 20px 18px; border-bottom: 1px solid var(--line); }
+.detail-panel h3 { margin: 0 0 10px; font-size: 15px; text-transform: uppercase; letter-spacing: .08em; }
+.detail-panel h3 span { color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; }
+.detail-panel p { margin: 0; color: var(--ink); line-height: 1.35; }
+.news-list { display: grid; gap: 8px; }
+.news-list a { color: var(--ink); text-decoration-color: #b98b6e; line-height: 1.25; }
 small { display: block; margin-top: 5px; font-size: 12px; }
 @media (max-width: 900px) {
   main { width: min(100% - 20px, 1480px); padding: 20px 0; }
   .hero, .sheet-title { display: block; }
   .stats { min-width: 0; margin-top: 18px; grid-template-columns: repeat(3, 1fr); }
   .mover-grid { grid-template-columns: 1fr 1fr; }
+  .headline-grid { grid-template-columns: 1fr; }
   input { margin-top: 12px; }
+  table { min-width: 1180px; }
+  .detail-panel { grid-template-columns: 1fr; }
 }
 """
