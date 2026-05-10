@@ -30,6 +30,7 @@ NEWS_PER_COMPANY = int(os.getenv("NEWS_PER_COMPANY", "3"))
 QUOTE_BATCH_SIZE = int(os.getenv("QUOTE_BATCH_SIZE", "40"))
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+FETCH_NEWS_ON_REFRESH = os.getenv("FETCH_NEWS_ON_REFRESH", "false").lower() == "true"
 
 
 SYMBOL_OVERRIDES = {
@@ -88,6 +89,7 @@ class MarketTracker:
         self.last_refresh_finished = ""
         self.refresh_count = 0
         self.last_error = ""
+        self.is_refreshing = False
         self._lock = threading.RLock()
 
     def snapshot(self) -> dict[str, Any]:
@@ -116,27 +118,37 @@ class MarketTracker:
                 "last_refresh_finished": self.last_refresh_finished,
                 "refresh_count": self.refresh_count,
                 "last_error": self.last_error,
+                "is_refreshing": self.is_refreshing,
                 "refresh_seconds": REFRESH_SECONDS,
             }
 
-    def refresh(self) -> None:
+    def refresh(self, include_news: bool = FETCH_NEWS_ON_REFRESH) -> None:
         started = utc_now()
         with self._lock:
+            if self.is_refreshing:
+                return
+            self.is_refreshing = True
             self.last_refresh_started = started
             self.last_error = ""
 
         try:
             quotes = fetch_quotes(self.companies, self.quotes)
-            news = fetch_news_for_companies(self.companies)
             with self._lock:
                 self.quotes = quotes
-                self.news = news
                 self.last_refresh_finished = utc_now()
                 self.refresh_count += 1
+
+            if include_news:
+                news = fetch_news_for_companies(self.companies)
+                with self._lock:
+                    self.news = news
         except Exception as exc:
             with self._lock:
                 self.last_error = f"{type(exc).__name__}: {exc}"
                 self.last_refresh_finished = utc_now()
+        finally:
+            with self._lock:
+                self.is_refreshing = False
 
 
 def load_companies(path: Path) -> list[Company]:
@@ -151,10 +163,11 @@ def load_companies(path: Path) -> list[Company]:
             symbols = parse_symbols(row.get("ticker", ""))
             if not symbols:
                 symbols = SYMBOL_OVERRIDES.get(row.get("company", ""), [])
+            ticker = row.get("ticker", "") or " | ".join(symbols)
             companies.append(Company(
                 company=row.get("company", ""),
                 country=row.get("country", ""),
-                ticker=row.get("ticker", ""),
+                ticker=ticker,
                 exchange=row.get("exchange", ""),
                 isin=row.get("isin", ""),
                 sources=row.get("sources", ""),
@@ -450,10 +463,11 @@ async def startup() -> None:
 
 
 async def refresh_loop() -> None:
-    await asyncio.to_thread(tracker.refresh)
+    await asyncio.sleep(1)
+    await asyncio.to_thread(tracker.refresh, False)
     while True:
         await asyncio.sleep(REFRESH_SECONDS)
-        await asyncio.to_thread(tracker.refresh)
+        await asyncio.to_thread(tracker.refresh, FETCH_NEWS_ON_REFRESH)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -468,8 +482,8 @@ def api_markets() -> dict[str, Any]:
 
 @app.post("/api/refresh")
 async def api_refresh() -> dict[str, Any]:
-    await asyncio.to_thread(tracker.refresh)
-    return tracker.snapshot()
+    asyncio.create_task(asyncio.to_thread(tracker.refresh, FETCH_NEWS_ON_REFRESH))
+    return {"status": "scheduled", **tracker.snapshot()}
 
 
 @app.get("/health")
@@ -485,6 +499,7 @@ def styles() -> Response:
 def render_html(data: dict[str, Any]) -> str:
     rows = "\n".join(render_row(row) for row in data["companies"])
     movers = "\n".join(render_mover(row) for row in data["movers"])
+    refresh_state = "Refreshing..." if data["is_refreshing"] else "Idle"
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -511,6 +526,7 @@ def render_html(data: dict[str, Any]) -> str:
     <section class="status">
       <span>Last refresh: {esc(data["last_refresh_finished"] or "pending")}</span>
       <span>Runs: {data["refresh_count"]}</span>
+      <span id="refreshState">{esc(refresh_state)}</span>
       <span>{esc(data["last_error"] or "No tracker errors")}</span>
       <button id="refreshBtn">Refresh now</button>
     </section>
@@ -552,9 +568,23 @@ def render_html(data: dict[str, Any]) -> str:
       rows.forEach(row => row.hidden = !row.innerText.toLowerCase().includes(q));
     }});
     document.getElementById('refreshBtn').addEventListener('click', async () => {{
-      await fetch('/api/refresh', {{ method: 'POST' }});
-      location.reload();
+      const state = document.getElementById('refreshState');
+      state.textContent = 'Scheduling refresh...';
+      try {{
+        await fetch('/api/refresh', {{ method: 'POST' }});
+        state.textContent = 'Refreshing...';
+        setTimeout(() => location.reload(), 8000);
+      }} catch (error) {{
+        state.textContent = 'Refresh request failed; retrying page reload...';
+        setTimeout(() => location.reload(), 3000);
+      }}
     }});
+    setInterval(async () => {{
+      try {{
+        const data = await fetch('/api/markets').then(r => r.json());
+        if (data.refresh_count > {data["refresh_count"]}) location.reload();
+      }} catch (error) {{}}
+    }}, 10000);
   </script>
 </body>
 </html>"""

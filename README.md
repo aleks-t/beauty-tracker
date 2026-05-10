@@ -15,6 +15,7 @@ It runs as a long-lived web service, not a Railway Cron job. That matters becaus
 - Stores the last quote snapshot in process memory.
 - Calculates direction, price change, and percent change on each refresh.
 - Pulls company-related news with this fallback order: Finnhub if `FINNHUB_API_KEY` is set, Alpha Vantage if `ALPHA_VANTAGE_API_KEY` is set, yfinance/Yahoo Finance, then Google News RSS.
+- Refresh requests return immediately and run in the background so Railway/browser request timeouts do not leave the page stuck on `n/a`.
 - Shows a spreadsheet-like dashboard at `/`.
 - Exposes raw JSON at `/api/markets`.
 
@@ -46,6 +47,7 @@ uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
 - `QUOTE_BATCH_SIZE`: number of symbols requested per yfinance batch. Defaults to `40`.
 - `FINNHUB_API_KEY`: optional. Enables Finnhub company-news lookup before other news providers.
 - `ALPHA_VANTAGE_API_KEY`: optional. Enables Alpha Vantage `NEWS_SENTIMENT` lookup if Finnhub is not configured or has no result.
+- `FETCH_NEWS_ON_REFRESH`: optional. Defaults to `false` so prices populate quickly on Railway. Set to `true` if you want every refresh to also fetch article links.
 
 ## Important Limits
 
