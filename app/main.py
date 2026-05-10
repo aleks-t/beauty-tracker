@@ -180,54 +180,78 @@ def parse_symbols(ticker_value: str) -> list[str]:
 
 
 def fetch_quotes(companies: list[Company], previous: dict[str, QuoteState]) -> dict[str, QuoteState]:
-    symbol_to_company: dict[str, Company] = {}
-    for company in companies:
-        if company.symbols:
-            symbol_to_company[company.symbols[0]] = company
-
     output: dict[str, QuoteState] = {}
-    symbols = list(symbol_to_company)
+    for company in companies:
+        prior = previous.get(company.company, QuoteState())
+        errors: list[str] = []
+        for symbol in company.symbols:
+            quote, error = fetch_quote_for_symbol(symbol, prior)
+            if quote.price is not None:
+                output[company.company] = quote
+                break
+            errors.append(error)
 
-    for i in range(0, len(symbols), QUOTE_BATCH_SIZE):
-        batch = symbols[i:i + QUOTE_BATCH_SIZE]
-        tickers = yf.Tickers(" ".join(batch))
-        for symbol in batch:
-            company = symbol_to_company[symbol]
-            prior = previous.get(company.company, QuoteState())
-            try:
-                info = tickers.tickers[symbol].fast_info
-                price = safe_float(get_fast_info(info, "last_price"))
-                prev_close = safe_float(get_fast_info(info, "previous_close"))
-                currency = str(get_fast_info(info, "currency") or "")
-                market_state = str(get_fast_info(info, "market_state") or "")
-
-                baseline = prior.price if prior.price is not None else prev_close
-                change = price - baseline if price is not None and baseline is not None else None
-                change_pct = (change / baseline * 100) if change is not None and baseline else None
-                direction = "flat"
-                if change and change > 0:
-                    direction = "up"
-                elif change and change < 0:
-                    direction = "down"
-
-                output[company.company] = QuoteState(
-                    price=price,
-                    previous_price=baseline,
-                    change=change,
-                    change_pct=change_pct,
-                    direction=direction,
-                    currency=currency,
-                    market_state=market_state,
-                    updated_at=utc_now(),
-                )
-            except Exception as exc:
-                output[company.company] = QuoteState(
-                    previous_price=prior.price,
-                    updated_at=utc_now(),
-                    error=f"{symbol}: {type(exc).__name__}",
-                )
+        if company.company not in output:
+            output[company.company] = QuoteState(
+                previous_price=prior.price,
+                updated_at=utc_now(),
+                error="; ".join(e for e in errors if e) or "no symbols",
+            )
 
     return output
+
+
+def fetch_quote_for_symbol(symbol: str, prior: QuoteState) -> tuple[QuoteState, str]:
+    ticker = yf.Ticker(symbol)
+    price: float | None = None
+    prev_close: float | None = None
+    currency = ""
+    market_state = ""
+    errors: list[str] = []
+
+    try:
+        info = ticker.fast_info
+        price = safe_float(get_fast_info(info, "last_price"))
+        prev_close = safe_float(get_fast_info(info, "previous_close"))
+        currency = str(get_fast_info(info, "currency") or "")
+        market_state = str(get_fast_info(info, "market_state") or "")
+    except Exception as exc:
+        errors.append(f"fast_info {type(exc).__name__}")
+
+    if price is None:
+        try:
+            history = ticker.history(period="5d", interval="1d", auto_adjust=False)
+            if not history.empty and "Close" in history:
+                closes = [safe_float(v) for v in history["Close"].dropna().tolist()]
+                closes = [v for v in closes if v is not None]
+                if closes:
+                    price = closes[-1]
+                    if len(closes) >= 2:
+                        prev_close = closes[-2]
+        except Exception as exc:
+            errors.append(f"history {type(exc).__name__}")
+
+    baseline = prior.price if prior.price is not None else prev_close
+    change = price - baseline if price is not None and baseline is not None else None
+    change_pct = (change / baseline * 100) if change is not None and baseline else None
+    direction = "flat"
+    if change and change > 0:
+        direction = "up"
+    elif change and change < 0:
+        direction = "down"
+
+    quote = QuoteState(
+        price=price,
+        previous_price=baseline,
+        change=change,
+        change_pct=change_pct,
+        direction=direction,
+        currency=currency,
+        market_state=market_state,
+        updated_at=utc_now(),
+        error="" if price is not None else f"{symbol}: {', '.join(errors) or 'no price'}",
+    )
+    return quote, quote.error
 
 
 def get_fast_info(info: Any, key: str) -> Any:

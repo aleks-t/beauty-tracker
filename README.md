@@ -8,6 +8,7 @@ It runs as a long-lived web service, not a Railway Cron job. That matters becaus
 
 - Loads the company universe from `data/BEAUTY_UNIVERSE_MASTER.csv`.
 - Tracks ticker-backed companies with `yfinance`.
+- Fetches quotes with per-symbol retry and a recent-history fallback, because Yahoo's batched `fast_info` path can return `KeyError` even for valid tickers.
 - Adds ticker overrides for six companies that were present but missing symbols in the original CSV: Terminal X, Shobido, Coreana Cosmetics, Kimberly-Clark, Nature's Sunshine Products, and Nu Skin Enterprises.
 - Excludes non-standalone or Yahoo-unpriceable rows from the app-local CSV: Avon Products, Fancl, Revlon, MAV Beauty Brands, Relativity Holdings, and Scientist Home Future Health.
 - Updates Natura from the delisted `NTCO3.SA` symbol to `NATU3.SA`.
