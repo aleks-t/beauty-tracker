@@ -30,10 +30,12 @@ NEWS_PER_COMPANY = int(os.getenv("NEWS_PER_COMPANY", "3"))
 QUOTE_BATCH_SIZE = int(os.getenv("QUOTE_BATCH_SIZE", "40"))
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
-FETCH_NEWS_ON_REFRESH = os.getenv("FETCH_NEWS_ON_REFRESH", "false").lower() == "true"
 QUOTE_WORKERS = int(os.getenv("QUOTE_WORKERS", "12"))
 QUOTE_TIMEOUT_SECONDS = int(os.getenv("QUOTE_TIMEOUT_SECONDS", "8"))
 ENABLE_YFINANCE_QUOTE_FALLBACK = os.getenv("ENABLE_YFINANCE_QUOTE_FALLBACK", "false").lower() == "true"
+NEWS_REFRESH_SECONDS = int(os.getenv("NEWS_REFRESH_SECONDS", "3600"))
+NEWS_WORKERS = int(os.getenv("NEWS_WORKERS", "8"))
+NEWS_TIMEOUT_SECONDS = int(os.getenv("NEWS_TIMEOUT_SECONDS", "6"))
 
 
 SYMBOL_OVERRIDES = {
@@ -90,9 +92,13 @@ class MarketTracker:
         self.news: dict[str, list[NewsItem]] = {}
         self.last_refresh_started = ""
         self.last_refresh_finished = ""
+        self.last_news_refresh_finished = ""
         self.refresh_count = 0
+        self.news_refresh_count = 0
         self.last_error = ""
+        self.last_news_error = ""
         self.is_refreshing = False
+        self.is_refreshing_news = False
         self._lock = threading.RLock()
 
     def snapshot(self) -> dict[str, Any]:
@@ -119,13 +125,18 @@ class MarketTracker:
                 "tracked_count": sum(1 for c in self.companies if c.symbols),
                 "last_refresh_started": self.last_refresh_started,
                 "last_refresh_finished": self.last_refresh_finished,
+                "last_news_refresh_finished": self.last_news_refresh_finished,
                 "refresh_count": self.refresh_count,
+                "news_refresh_count": self.news_refresh_count,
                 "last_error": self.last_error,
+                "last_news_error": self.last_news_error,
                 "is_refreshing": self.is_refreshing,
+                "is_refreshing_news": self.is_refreshing_news,
                 "refresh_seconds": REFRESH_SECONDS,
+                "news_refresh_seconds": NEWS_REFRESH_SECONDS,
             }
 
-    def refresh(self, include_news: bool = FETCH_NEWS_ON_REFRESH) -> None:
+    def refresh(self) -> None:
         started = utc_now()
         with self._lock:
             if self.is_refreshing:
@@ -140,11 +151,6 @@ class MarketTracker:
                 self.quotes = quotes
                 self.last_refresh_finished = utc_now()
                 self.refresh_count += 1
-
-            if include_news:
-                news = fetch_news_for_companies(self.companies)
-                with self._lock:
-                    self.news = news
         except Exception as exc:
             with self._lock:
                 self.last_error = f"{type(exc).__name__}: {exc}"
@@ -152,6 +158,27 @@ class MarketTracker:
         finally:
             with self._lock:
                 self.is_refreshing = False
+
+    def refresh_news(self) -> None:
+        with self._lock:
+            if self.is_refreshing_news:
+                return
+            self.is_refreshing_news = True
+            self.last_news_error = ""
+
+        try:
+            news = fetch_news_for_companies(self.companies)
+            with self._lock:
+                self.news = news
+                self.last_news_refresh_finished = utc_now()
+                self.news_refresh_count += 1
+        except Exception as exc:
+            with self._lock:
+                self.last_news_error = f"{type(exc).__name__}: {exc}"
+                self.last_news_refresh_finished = utc_now()
+        finally:
+            with self._lock:
+                self.is_refreshing_news = False
 
 
 def load_companies(path: Path) -> list[Company]:
@@ -374,19 +401,30 @@ def safe_float(value: Any) -> float | None:
 
 def fetch_news_for_companies(companies: list[Company]) -> dict[str, list[NewsItem]]:
     news: dict[str, list[NewsItem]] = {}
-    for company in companies[:]:
-        symbol = company.symbols[0] if company.symbols else ""
-        items: list[NewsItem] = []
-        if FINNHUB_API_KEY and symbol:
-            items = fetch_finnhub_news(symbol, NEWS_PER_COMPANY)
-        if not items and ALPHA_VANTAGE_API_KEY and symbol:
-            items = fetch_alpha_vantage_news(symbol, NEWS_PER_COMPANY)
-        if not items and symbol:
-            items = fetch_yfinance_news(company.company, symbol, NEWS_PER_COMPANY)
-        if not items:
-            items = fetch_google_news(company.company, NEWS_PER_COMPANY)
-        news[company.company] = items
+    with ThreadPoolExecutor(max_workers=NEWS_WORKERS) as executor:
+        futures = {
+            executor.submit(fetch_news_for_company, company): company
+            for company in companies
+        }
+        for future in as_completed(futures):
+            company = futures[future]
+            try:
+                news[company.company] = future.result()
+            except Exception:
+                news[company.company] = []
     return news
+
+
+def fetch_news_for_company(company: Company) -> list[NewsItem]:
+    symbol = company.symbols[0] if company.symbols else ""
+    items: list[NewsItem] = []
+    if FINNHUB_API_KEY and symbol:
+        items = fetch_finnhub_news(symbol, NEWS_PER_COMPANY)
+    if not items and ALPHA_VANTAGE_API_KEY and symbol:
+        items = fetch_alpha_vantage_news(symbol, NEWS_PER_COMPANY)
+    if not items:
+        items = fetch_google_news(company.company, NEWS_PER_COMPANY)
+    return items
 
 
 def fetch_finnhub_news(symbol: str, limit: int) -> list[NewsItem]:
@@ -398,7 +436,7 @@ def fetch_finnhub_news(symbol: str, limit: int) -> list[NewsItem]:
         "to": to_date.isoformat(),
         "token": FINNHUB_API_KEY,
     })
-    data = fetch_json(f"https://finnhub.io/api/v1/company-news?{params}", timeout=8)
+    data = fetch_json(f"https://finnhub.io/api/v1/company-news?{params}", timeout=NEWS_TIMEOUT_SECONDS)
     if not isinstance(data, list):
         return []
 
@@ -427,7 +465,7 @@ def fetch_alpha_vantage_news(symbol: str, limit: int) -> list[NewsItem]:
         "limit": limit,
         "apikey": ALPHA_VANTAGE_API_KEY,
     })
-    data = fetch_json(f"https://www.alphavantage.co/query?{params}", timeout=8)
+    data = fetch_json(f"https://www.alphavantage.co/query?{params}", timeout=NEWS_TIMEOUT_SECONDS)
     feed = data.get("feed", []) if isinstance(data, dict) else []
     items: list[NewsItem] = []
     for item in feed[:limit]:
@@ -502,7 +540,7 @@ def fetch_google_news(company_name: str, limit: int) -> list[NewsItem]:
     url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
     request = urllib.request.Request(url, headers={"User-Agent": "beauty-market-tracker/1.0"})
     try:
-        with urllib.request.urlopen(request, timeout=8) as response:
+        with urllib.request.urlopen(request, timeout=NEWS_TIMEOUT_SECONDS) as response:
             raw = response.read()
     except Exception:
         return []
@@ -549,14 +587,23 @@ app = FastAPI(title="Beauty Market Tracker")
 @app.on_event("startup")
 async def startup() -> None:
     asyncio.create_task(refresh_loop())
+    asyncio.create_task(news_refresh_loop())
 
 
 async def refresh_loop() -> None:
     await asyncio.sleep(1)
-    await asyncio.to_thread(tracker.refresh, False)
+    await asyncio.to_thread(tracker.refresh)
     while True:
         await asyncio.sleep(REFRESH_SECONDS)
-        await asyncio.to_thread(tracker.refresh, FETCH_NEWS_ON_REFRESH)
+        await asyncio.to_thread(tracker.refresh)
+
+
+async def news_refresh_loop() -> None:
+    await asyncio.sleep(5)
+    await asyncio.to_thread(tracker.refresh_news)
+    while True:
+        await asyncio.sleep(NEWS_REFRESH_SECONDS)
+        await asyncio.to_thread(tracker.refresh_news)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -571,7 +618,13 @@ def api_markets() -> dict[str, Any]:
 
 @app.post("/api/refresh")
 async def api_refresh() -> dict[str, Any]:
-    asyncio.create_task(asyncio.to_thread(tracker.refresh, FETCH_NEWS_ON_REFRESH))
+    asyncio.create_task(asyncio.to_thread(tracker.refresh))
+    return {"status": "scheduled", **tracker.snapshot()}
+
+
+@app.post("/api/refresh-news")
+async def api_refresh_news() -> dict[str, Any]:
+    asyncio.create_task(asyncio.to_thread(tracker.refresh_news))
     return {"status": "scheduled", **tracker.snapshot()}
 
 
@@ -589,6 +642,7 @@ def render_html(data: dict[str, Any]) -> str:
     rows = "\n".join(render_row(row) for row in data["companies"])
     movers = "\n".join(render_mover(row) for row in data["movers"])
     refresh_state = "Refreshing..." if data["is_refreshing"] else "Idle"
+    news_state = "Refreshing news..." if data["is_refreshing_news"] else "News idle"
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -618,6 +672,8 @@ def render_html(data: dict[str, Any]) -> str:
       <span id="refreshState">{esc(refresh_state)}</span>
       <span>{esc(data["last_error"] or "No tracker errors")}</span>
       <button id="refreshBtn">Refresh now</button>
+      <button id="newsBtn">Refresh news</button>
+      <span id="newsState">{esc(news_state)}; last news: {esc(data["last_news_refresh_finished"] or "pending")}</span>
     </section>
 
     <section class="movers">
@@ -668,10 +724,25 @@ def render_html(data: dict[str, Any]) -> str:
         setTimeout(() => location.reload(), 3000);
       }}
     }});
+    document.getElementById('newsBtn').addEventListener('click', async () => {{
+      const state = document.getElementById('newsState');
+      state.textContent = 'Scheduling news refresh...';
+      try {{
+        await fetch('/api/refresh-news', {{ method: 'POST' }});
+        state.textContent = 'Refreshing news...';
+        setTimeout(() => location.reload(), 12000);
+      }} catch (error) {{
+        state.textContent = 'News refresh request failed; retrying page reload...';
+        setTimeout(() => location.reload(), 3000);
+      }}
+    }});
     setInterval(async () => {{
       try {{
         const data = await fetch('/api/markets').then(r => r.json());
-        if (data.refresh_count > {data["refresh_count"]}) location.reload();
+        if (
+          data.refresh_count > {data["refresh_count"]} ||
+          data.news_refresh_count > {data["news_refresh_count"]}
+        ) location.reload();
       }} catch (error) {{}}
     }}, 10000);
   </script>

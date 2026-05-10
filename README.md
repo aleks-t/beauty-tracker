@@ -14,7 +14,7 @@ It runs as a long-lived web service, not a Railway Cron job. That matters becaus
 - Updates Natura from the delisted `NTCO3.SA` symbol to `NATU3.SA`.
 - Stores the last quote snapshot in process memory.
 - Calculates direction, price change, and percent change on each refresh.
-- Pulls company-related news with this fallback order: Finnhub if `FINNHUB_API_KEY` is set, Alpha Vantage if `ALPHA_VANTAGE_API_KEY` is set, yfinance/Yahoo Finance, then Google News RSS.
+- Pulls company-related news in a separate background loop with this fallback order: Finnhub if `FINNHUB_API_KEY` is set, Alpha Vantage if `ALPHA_VANTAGE_API_KEY` is set, then Google News RSS.
 - Refresh requests return immediately and run in the background so Railway/browser request timeouts do not leave the page stuck on `n/a`.
 - Shows a spreadsheet-like dashboard at `/`.
 - Exposes raw JSON at `/api/markets`.
@@ -47,10 +47,12 @@ uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
 - `QUOTE_BATCH_SIZE`: number of symbols requested per yfinance batch. Defaults to `40`.
 - `FINNHUB_API_KEY`: optional. Enables Finnhub company-news lookup before other news providers.
 - `ALPHA_VANTAGE_API_KEY`: optional. Enables Alpha Vantage `NEWS_SENTIMENT` lookup if Finnhub is not configured or has no result.
-- `FETCH_NEWS_ON_REFRESH`: optional. Defaults to `false` so prices populate quickly on Railway. Set to `true` if you want every refresh to also fetch article links.
 - `QUOTE_WORKERS`: optional. Concurrent Yahoo chart requests. Defaults to `12`.
 - `QUOTE_TIMEOUT_SECONDS`: optional. Per-symbol quote timeout. Defaults to `8`.
 - `ENABLE_YFINANCE_QUOTE_FALLBACK`: optional. Defaults to `false`; leave it off on Railway unless you specifically want yfinance as a backup.
+- `NEWS_REFRESH_SECONDS`: optional. Separate background news refresh interval. Defaults to `3600`.
+- `NEWS_WORKERS`: optional. Concurrent news requests. Defaults to `8`.
+- `NEWS_TIMEOUT_SECONDS`: optional. Per-company news timeout. Defaults to `6`.
 
 ## Important Limits
 
